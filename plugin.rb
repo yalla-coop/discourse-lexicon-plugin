@@ -90,7 +90,7 @@ after_initialize do
           chat_message_id: notification_data[:chat_message_id],
           chat_channel_id: notification_data[:chat_channel_id],
           channel_name: notification_data[:channel_name],
-          user_name: notification_data[:sender],
+          username: notification_data[:sender],
           is_direct_message_channel:
             notification_data[:is_direct_message_channel],
           message: notification_data[:message]
