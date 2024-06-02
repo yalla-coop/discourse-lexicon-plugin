@@ -9,7 +9,23 @@ class PushNotificationManager
     post_url = push_notification.post_url
     is_pm = push_notification.is_pm
 
-    content = NotificationContent.generate_notification_content(notification_type, sender, topic_title, excerpt)
+    chat_message_id = push_notification.chat_message_id
+    chat_channel_id = push_notification.chat_channel_id
+    channel_name = push_notification.channel_name
+    is_direct_message_channel = push_notification.is_direct_message_channel
+    is_direct_message_channel = is_direct_message_channel == "true"
+    message = push_notification.message
+
+    content =
+      NotificationContent.generate_notification_content(
+        notification_type,
+        sender,
+        topic_title,
+        excerpt,
+        channel_name: channel_name,
+        is_direct_message_channel: is_direct_message_channel,
+        message: message
+      )
     title = content[:title]
     body = content[:body]
 
@@ -28,27 +44,28 @@ class PushNotificationManager
           next
         end
         messages << client
-                    .notification
-                    .to(expo_pn_token)
-                    .sound('default')
-                    .title(title)
-                    .body(body)
-                    .data(
-                      {
-                        'discourse_url' => post_url,
-                        'type' => notification_type,
-                        'is_pm' => is_pm
-                      }
-                    )
+          .notification
+          .to(expo_pn_token)
+          .sound("default")
+          .title(title)
+          .body(body)
+          .data(
+            {
+              "discourse_url" => post_url,
+              "type" => notification_type,
+              "is_pm" => is_pm,
+              "chat_message_id" => chat_message_id,
+              "chat_channel_id" => chat_channel_id,
+              "channel_name" => channel_name,
+              "is_direct_message_channel" => is_direct_message_channel,
+              "message" => message
+            }
+          )
       end
 
       tickets = client.send(messages)
       # Error handling
-      process_tickets(
-        tickets,
-        push_notification,
-        tokens: expo_pn_tokens
-      )
+      process_tickets(tickets, push_notification, tokens: expo_pn_tokens)
     end
   end
 
@@ -62,22 +79,22 @@ class PushNotificationManager
       elsif ticket_error.is_a?(Expo::Push::TicketsWithErrors)
         ticket_error.errors.each do |error_data|
           should_retry = true
-          if error_data['code'] == 'PUSH_TOO_MANY_EXPERIENCE_IDS'
+          if error_data["code"] == "PUSH_TOO_MANY_EXPERIENCE_IDS"
             # Go through all the details
-            error_data['details'].each do |correct_experience, tokens|
+            error_data["details"].each do |correct_experience, tokens|
               # Find the incorrect instances
               # Do note that we still fail to send the notification and this need to be retried
               instances =
                 ExpoPnSubscription
-                .where.not(experience_id: correct_experience)
-                .where(expo_pn_token: tokens)
+                  .where.not(experience_id: correct_experience)
+                  .where(expo_pn_token: tokens)
               next if instances.blank?
 
               next if instances.update_all(experience_id: correct_experience)
 
               # We failed to update the experience_id
               Rails.logger.error(
-                'PushNotificationManger: Failed to update experience_id with tokens ' +
+                "PushNotificationManger: Failed to update experience_id with tokens " +
                   tokens.to_s
               )
               next
@@ -85,7 +102,7 @@ class PushNotificationManager
             end
           else
             # Request error is not PUSH_TOO_MANY_EXPERIENCE_IDS
-            Rails.logger.error('PushNotificationManger: ' + error_data.to_s)
+            Rails.logger.error("PushNotificationManger: " + error_data.to_s)
           end
         end
       elsif ticket_error.respond_to?(:explain)
@@ -96,13 +113,18 @@ class PushNotificationManager
 
         ExpoPnSubscription.where(expo_pn_token: original_token).destroy_all
       else
-        Rails.logger.error('PushNotificationManger: ' + ticket_error.to_s)
+        Rails.logger.error("PushNotificationManger: " + ticket_error.to_s)
       end
     end
 
     # Only triggered when there is an ticket entry with error (whole request error)
     # Ticket error like DeviceNotRegistered won't trigger this
-    retry_push_notification(tokens: opts[:tokens], push_notification_id: push_notification.id) if should_retry
+    if should_retry
+      retry_push_notification(
+        tokens: opts[:tokens],
+        push_notification_id: push_notification.id
+      )
+    end
 
     # handle ticket receipts
     ReceiptsManager.queue_receipts(tickets, push_notification)
@@ -110,30 +132,41 @@ class PushNotificationManager
 
   def self.retry_push_notification(tokens:, push_notification_id:)
     # update all existing push_notification_retries
-    PushNotificationRetry.where(push_notification_id: push_notification_id, token: tokens).update_all(
-      ['retry_count = retry_count + 1, updated_at = ?', Time.current]
+    PushNotificationRetry.where(
+      push_notification_id: push_notification_id,
+      token: tokens
+    ).update_all(
+      ["retry_count = retry_count + 1, updated_at = ?", Time.current]
     )
-    existing_push_notification_retries = PushNotificationRetry.where(push_notification_id: push_notification_id,
-                                                                     token: tokens)
+    existing_push_notification_retries =
+      PushNotificationRetry.where(
+        push_notification_id: push_notification_id,
+        token: tokens
+      )
 
     # create non-existing push_notification_retries
     new_tokens = tokens - existing_push_notification_retries.map(&:token)
-    new_push_notification_retries_input = new_tokens.map do |token|
-      {
-        token: token,
-        push_notification_id: push_notification_id,
-        retry_count: 1
-      }
-    end
-    new_push_notification_retries = PushNotificationRetry.create(new_push_notification_retries_input)
-    push_notification_retries = existing_push_notification_retries + new_push_notification_retries
+    new_push_notification_retries_input =
+      new_tokens.map do |token|
+        {
+          token: token,
+          push_notification_id: push_notification_id,
+          retry_count: 1
+        }
+      end
+    new_push_notification_retries =
+      PushNotificationRetry.create(new_push_notification_retries_input)
+    push_notification_retries =
+      existing_push_notification_retries + new_push_notification_retries
 
     # filter push_notification_retries that have retry_count < RETRY_LIMIT
-    eligible_retry_records = push_notification_retries.select do |retry_record|
-      retry_record.eligible_to_retry
-    end
+    eligible_retry_records =
+      push_notification_retries.select do |retry_record|
+        retry_record.eligible_to_retry
+      end
     # group eligible_retry_records by retry_count
-    eligible_retry_records_by_retry_count = eligible_retry_records.group_by(&:retry_count)
+    eligible_retry_records_by_retry_count =
+      eligible_retry_records.group_by(&:retry_count)
     # loop through eligible_retry_records_by_retry_count and enqueue
     eligible_retry_records_by_retry_count.each do |retry_count, retry_records|
       retry_ids = retry_records.map(&:id)
@@ -145,15 +178,18 @@ class PushNotificationManager
     end
 
     # filter push_notification_retries that have retry_count >= RETRY_LIMIT and get the ids
-    excessive_retry_ids = push_notification_retries.select do |retry_record|
-      !retry_record.eligible_to_retry
-    end.map(&:id)
+    excessive_retry_ids =
+      push_notification_retries
+        .select { |retry_record| !retry_record.eligible_to_retry }
+        .map(&:id)
     return unless excessive_retry_ids.present?
 
     # delete_all excessive_retry_ids
     PushNotificationRetry.where(id: excessive_retry_ids).delete_all
     # log excessive_retry_ids
-    Rails.logger.error("PushNotificationManger: Excessive retries for push_notification_id: #{push_notification_id}")
+    Rails.logger.error(
+      "PushNotificationManger: Excessive retries for push_notification_id: #{push_notification_id}"
+    )
   end
 
   def self.build_experience_id_groups(expo_pn_subscriptions)

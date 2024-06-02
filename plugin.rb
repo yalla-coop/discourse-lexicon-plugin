@@ -8,41 +8,47 @@
 
 # We need to load all external packages first
 # Reference: https://meta.discourse.org/t/plugin-using-own-gem/50007/4
-gem 'rake', '13.2.1'
-gem 'connection_pool', '2.4.1'
-gem 'unf_ext', '0.0.9.1'
-gem 'unf', '0.1.4'
-gem 'domain_name', '0.5.20190701'
-gem 'http-cookie', '1.0.5'
-gem 'ffi', '1.16.3'
-gem 'public_suffix', '5.0.5'
-gem 'addressable', '2.8.6'
-gem 'ffi-compiler', '1.0.1', require_name: 'ffi-compiler/loader'
-gem 'llhttp-ffi', '0.4.0', require_name: 'llhttp'
-gem 'http-form_data', '2.3.0', require_name: 'http/form_data'
-gem 'http', '5.1.0'
-require_relative 'lib/expo_server_sdk_ruby/expo/server/sdk'
+gem "rake", "13.2.1"
+gem "connection_pool", "2.4.1"
+gem "unf_ext", "0.0.9.1"
+gem "unf", "0.1.4"
+gem "domain_name", "0.5.20190701"
+gem "http-cookie", "1.0.5"
+gem "ffi", "1.16.3"
+gem "public_suffix", "5.0.5"
+gem "addressable", "2.8.6"
+gem "ffi-compiler", "1.0.1", require_name: "ffi-compiler/loader"
+gem "llhttp-ffi", "0.4.0", require_name: "llhttp"
+gem "http-form_data", "2.3.0", require_name: "http/form_data"
+gem "http", "5.1.0"
+require_relative "lib/expo_server_sdk_ruby/expo/server/sdk"
 
 enabled_site_setting :lexicon_push_notifications_enabled
 enabled_site_setting :lexicon_email_deep_linking_enabled
 enabled_site_setting :lexicon_app_scheme
 
-load File.expand_path('lib/discourse-lexicon-plugin/engine.rb', __dir__)
+load File.expand_path("lib/discourse-lexicon-plugin/engine.rb", __dir__)
 
 # Site setting validators must be loaded before initialize
-require_relative 'lib/validators/lexicon_enable_deep_linking_validator'
-require_relative 'lib/validators/lexicon_app_scheme_validators'
+require_relative "lib/validators/lexicon_enable_deep_linking_validator"
+require_relative "lib/validators/lexicon_app_scheme_validators"
 
 after_initialize do
-  load File.expand_path('app/controllers/deeplink_controller.rb', __dir__)
-  load File.expand_path('app/deeplink_notification_module.rb', __dir__)
-  load File.expand_path('app/serializers/site_serializer.rb', __dir__)
+  load File.expand_path("app/controllers/deeplink_controller.rb", __dir__)
+  load File.expand_path("app/deeplink_notification_module.rb", __dir__)
+  load File.expand_path("app/serializers/site_serializer.rb", __dir__)
 
   if SiteSetting.lexicon_push_notifications_enabled
-    load File.expand_path('app/jobs/regular/expo_push_notification.rb', __dir__)
-    load File.expand_path('app/jobs/regular/check_pn_receipt.rb', __dir__)
-    load File.expand_path('app/jobs/scheduled/clean_up_push_notification_retries.rb', __dir__)
-    load File.expand_path('app/jobs/scheduled/clean_up_push_notification_receipts.rb', __dir__)
+    load File.expand_path("app/jobs/regular/expo_push_notification.rb", __dir__)
+    load File.expand_path("app/jobs/regular/check_pn_receipt.rb", __dir__)
+    load File.expand_path(
+           "app/jobs/scheduled/clean_up_push_notification_retries.rb",
+           __dir__
+         )
+    load File.expand_path(
+           "app/jobs/scheduled/clean_up_push_notification_receipts.rb",
+           __dir__
+         )
 
     User.class_eval { has_many :expo_pn_subscriptions, dependent: :delete_all }
 
@@ -55,12 +61,12 @@ after_initialize do
           topic_id: post.topic.id,
           excerpt:
             nil ||
-            post.excerpt(
-              400,
-              text_entities: true,
-              strip_links: true,
-              remap_emoji: true
-            ),
+              post.excerpt(
+                400,
+                text_entities: true,
+                strip_links: true,
+                remap_emoji: true
+              ),
           username: nil || post.username,
           post_url: post.url,
           is_pm: post.topic.private_message?
@@ -72,10 +78,34 @@ after_initialize do
         )
       end
     end
+
+    DiscourseEvent.on(
+      :created_chat_notification
+    ) do |notification_data, user_id, type|
+      user = User.find_by(id: user_id)
+      if user&.expo_pn_subscriptions&.exists?
+        payload = {
+          notification_type: type,
+          # excerpt: notification_data[:message][0..300],
+          chat_message_id: notification_data[:chat_message_id],
+          chat_channel_id: notification_data[:chat_channel_id],
+          channel_name: notification_data[:channel_name],
+          user_name: notification_data[:sender],
+          is_direct_message_channel:
+            notification_data[:is_direct_message_channel],
+          message: notification_data[:message]
+        }
+        Jobs.enqueue(
+          :expo_push_notification,
+          payload: payload,
+          user_id: user.id
+        )
+      end
+    end
   end
 
   Discourse::Application.routes.append do
-    get '/deeplink/*link' => 'deeplink#index'
+    get "/deeplink/*link" => "deeplink#index"
   end
   UserNotifications.class_eval { prepend DeeplinkNotification }
 end

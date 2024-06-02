@@ -9,6 +9,11 @@ erDiagram
       string notification_type
       string post_url
       boolean is_pm
+      int chat_message_id FK
+      int chat_channel_id FK
+      string channel_name
+      boolean is_direct_message_channel
+      string message
     }
     push_notification_retries {
         int id PK
