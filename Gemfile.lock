@@ -9,7 +9,7 @@ GEM
     expo-server-sdk (0.1.4)
       connection_pool (~> 2.2)
       http (>= 4.0, < 6.0)
-    ffi (1.16.3)
+    ffi (1.17.0-arm64-darwin)
     ffi-compiler (1.0.1)
       ffi (>= 1.0.0)
       rake
@@ -41,14 +41,14 @@ GEM
 
 PLATFORMS
   arm64-darwin-21
-  ruby
+  arm64-darwin-22
 
 DEPENDENCIES
   addressable (= 2.8.6)
   connection_pool (= 2.4.1)
   domain_name (= 0.5.20190701)
   expo-server-sdk (= 0.1.4)
-  ffi (= 1.16.3)
+  ffi (= 1.17.0)
   http (= 5.1.0)
   http-cookie (= 1.0.5)
   http-form_data (= 2.3.0)
