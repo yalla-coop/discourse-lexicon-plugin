@@ -40,10 +40,10 @@ class NotificationContent
       Notification.types[:chat_message] => {
         text:
           (
-            if is_direct_message_channel
-              "sent you a message"
-            else
+            if channel_name
               "sent a message in #{channel_name}"
+            else
+              "sent you a message"
             end
           ),
         body: :message
