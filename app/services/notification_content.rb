@@ -1,3 +1,5 @@
+require_relative "pretty_text"
+
 class NotificationContent
   def self.generate_notification_content(
     notification_type,
@@ -64,11 +66,11 @@ class NotificationContent
 
     body =
       if variation[:body] == :excerpt
-        excerpt
+        PrettyText.excerpt(excerpt, 300)
       elsif variation[:body] == :message
         message[0..300]
       else
-        "#{sender}: #{excerpt}"
+        "#{sender}: #{PrettyText.excerpt(excerpt, 300)}"
       end
 
     { title: title, body: body }
