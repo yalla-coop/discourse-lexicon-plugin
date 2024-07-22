@@ -22,8 +22,23 @@ module PrettyText
     # Parse the content as HTML
     doc = Nokogiri::HTML.fragment(content)
 
+    # Remove specific domains and tags
+    doc.css("header.source, .onebox-metadata, .clear").remove
+
+    # Check for video placeholder and add custom message
+    video_placeholder =
+      doc
+        .css(".video-placeholder-container")
+        .find do |node|
+          node["data-video-src"]&.start_with?("/uploads/default/original")
+        end
+    return "uploaded a video" if video_placeholder
+
     # Get the text content, stripping out HTML tags
     text_content = doc.text
+
+    # Remove excessive spaces
+    text_content = text_content.gsub(/\s+/, " ").strip
 
     # Truncate to max_length
     truncated_content =
