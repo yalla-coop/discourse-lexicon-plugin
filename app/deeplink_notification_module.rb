@@ -6,11 +6,12 @@ module DeeplinkNotification
       user_email, opts = builder_args
       if opts.key?(:template) && opts[:template].respond_to?(:include?) &&
            (opts[:template].include? "user_notifications.user_")
-        #  throw and error for now to disallow these type of emails (as user have notifications on their mobile app)
-        raise "Error: opts[:url] has been updated to #{opts[:url]}"
-        url = opts[:url].dup
-        is_pm = opts[:private_reply]
-        opts[:url] = url.prepend("/deeplink").concat("?is_pm=#{is_pm}")
+        # url = opts[:url].dup
+        # is_pm = opts[:private_reply]
+        # opts[:url] = url.prepend("/deeplink").concat("?is_pm=#{is_pm}")
+        # Prevent the email from being sent by returning early
+        Rails.logger.warn "Email not sent due to deep link condition: #{opts[:url]}"
+        return
       end
     end
 
