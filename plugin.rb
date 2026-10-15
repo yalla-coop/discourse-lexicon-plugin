@@ -12,7 +12,10 @@
 
 gem 'domain_name', '0.5.20190701'
 gem 'http-cookie', '1.0.5'
-gem 'ffi', '1.17.1'
+# Use the ffi version Discourse core already loaded. A fixed version here breaks
+# the boot ("can't activate ffi-X, already activated ffi-Y") whenever core
+# bumps ffi, which it does at 3.5.4, 2026.3 and 2026.6.
+gem 'ffi', Gem.loaded_specs['ffi']&.version&.to_s || '1.17.1'
 gem 'ffi-compiler', '1.3.2', require_name: 'ffi-compiler/loader'
 gem 'llhttp-ffi', '0.4.0', require_name: 'llhttp'
 gem 'http-form_data', '2.3.0', require_name: 'http/form_data'
