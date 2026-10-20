@@ -1,7 +1,7 @@
 import sinon from "sinon";
 import { acceptance, query } from "discourse/tests/helpers/qunit-helpers";
 import { test } from "qunit";
-import { currentURL, visit } from "@ember/test-helpers";
+import { click, currentURL, visit } from "@ember/test-helpers";
 import I18n from "I18n";
 
 import DiscourseURL from "discourse/lib/url";
@@ -77,6 +77,20 @@ acceptance("Email Deep Linking Plugin", function (needs) {
 
     const button = query("#open-in-lexicon-app");
     assert.equal(button?.innerText, I18n.t("deeplink.button_label_view_post"));
+  });
+
+  test("tapping the button on Android opens the post in the app", async function (assert) {
+    const stub = sinon.stub(DiscourseURL, "redirectTo");
+    await useAndroidFlow({ isPm: false });
+    assert.false(stub.called, "Android does not open the app on its own");
+
+    await click("#open-in-lexicon-app");
+
+    assert.true(stub.called, "tapping the button opens the app");
+    assert.strictEqual(
+      stub.firstCall.args[0],
+      `${appScheme}://post-detail/t/${slug}/${topicId}/${postId}`
+    );
   });
 
   test("button reads 'View Message' when notification is for a message", async function (assert) {
